@@ -8,9 +8,10 @@ st.set_page_config(page_title="Router Vacuum Hold-Down Tradespace", layout="wide
 
 st.title("Router Vacuum Hold-Down Pressure Analysis")
 st.markdown("""
-Analyze the tradespace of CNC router vacuum hold-down configurations to determine
-if through-cutting causes part movement due to pressure loss and tool forces.
-The goal is to maintain part quality by ensuring adequate hold-down force throughout the cut.
+**Decision Support: Do you need tabs, or will vacuum hold-down keep the part in place?**
+
+All parts are fully cut through (100% depth). This tool calculates whether the remaining 
+vacuum hold-down force after cutting is sufficient to resist tool forces and prevent part movement.
 """)
 
 # --- Constants & Parameters ---
@@ -33,9 +34,37 @@ holding_force_psi = holding_force_psf / 144.0
 st.sidebar.markdown("---")
 st.sidebar.header("Part & Table Configuration")
 
-part_length = st.sidebar.number_input("Part Length (in)", 1.0, 48.0, 12.0, 0.5)
-part_width = st.sidebar.number_input("Part Width (in)", 1.0, 48.0, 8.0, 0.5)
-part_thickness = st.sidebar.number_input("Part Thickness (in)", 0.25, 3.0, 0.75, 0.25)
+# Common high-volume parts dropdown
+common_parts = {
+    "Custom (enter dimensions below)": {"length": 12.0, "width": 8.0, "thickness": 0.75},
+    "Part A": {"length": 12.0, "width": 8.0, "thickness": 0.75},
+    "Part B": {"length": 16.0, "width": 10.0, "thickness": 0.5},
+    "Part C": {"length": 24.0, "width": 12.0, "thickness": 1.0},
+    "Part D": {"length": 8.0, "width": 6.0, "thickness": 0.5},
+    "Part E": {"length": 18.0, "width": 14.0, "thickness": 0.75},
+}
+
+selected_part = st.sidebar.selectbox(
+    "Select Part Type",
+    list(common_parts.keys()),
+    help="Choose a common high-volume part or 'Custom' to enter your own dimensions"
+)
+
+# Load dimensions from selection
+default_dims = common_parts[selected_part]
+
+part_length = st.sidebar.number_input(
+    "Part Length (in)", 1.0, 48.0, default_dims["length"], 0.5,
+    disabled=(selected_part != "Custom (enter dimensions below)")
+)
+part_width = st.sidebar.number_input(
+    "Part Width (in)", 1.0, 48.0, default_dims["width"], 0.5,
+    disabled=(selected_part != "Custom (enter dimensions below)")
+)
+part_thickness = st.sidebar.number_input(
+    "Part Thickness (in)", 0.25, 3.0, default_dims["thickness"], 0.25,
+    disabled=(selected_part != "Custom (enter dimensions below)")
+)
 material_density = st.sidebar.number_input(
     "Material Density (lb/in³)", 0.01, 0.10, 0.025, 0.005,
     help="MDF ≈ 0.028, Plywood ≈ 0.022, Hardwood ≈ 0.025"
@@ -62,11 +91,13 @@ num_flutes = st.sidebar.selectbox("Number of Flutes", [1, 2, 3], index=1)
 def compute_tradespace(vacuum_psi, part_l, part_w, part_t, mat_density,
                        h_spacing, h_dia, t_dia, feed, rpm, flutes):
     """
-    Compute hold-down force vs cutting force across a range of through-cut scenarios.
+    Compute hold-down force vs cutting force for fully cut-out parts.
+    Assumption: part is 100% through-cut, vacuum seal is broken along perimeter.
     """
     results = []
 
     part_area = part_l * part_w  # in²
+    part_perimeter = 2 * (part_l + part_w)  # in
     part_weight = part_area * part_t * mat_density  # lb
 
     # Number of vacuum holes under the part
@@ -85,64 +116,52 @@ def compute_tradespace(vacuum_psi, part_l, part_w, part_t, mat_density,
     # Using simplified specific cutting force model
     # Fc = Kc * chip_area, Kc for wood ~15,000-25,000 PSI
     Kc = 18000  # specific cutting force for wood/composite (PSI)
-    chip_area = chip_load * part_t  # in² (width of cut = thickness in through-cut)
+    chip_area = chip_load * part_t  # in² (width of cut = thickness)
     cutting_force_lateral = Kc * chip_area  # lb
 
-    # Vary the percentage of through-cut (how much material is left as onion skin)
-    cut_through_percentages = np.arange(0, 105, 5)  # 0% to 100%
+    # When part is fully cut out, perimeter holes lose vacuum
+    # Estimate: holes within one hole-spacing distance of perimeter are compromised
+    perimeter_holes_lost = int(part_perimeter / h_spacing)
+    
+    # Calculate active holes after cut-out
+    active_holes = max(0, total_holes - perimeter_holes_lost)
+    active_vacuum_area = active_holes * hole_area
 
-    for pct in cut_through_percentages:
-        depth_of_cut = part_t * (pct / 100.0)
+    # Hold-down force = vacuum pressure × effective area + part weight
+    hold_down_force = vacuum_psi * active_vacuum_area + part_weight
 
-        # When cutting through, some vacuum holes along the cut path lose pressure
-        # Estimate holes compromised by the cut (along one edge)
-        cut_length = part_l  # assume cut runs full length
-        holes_along_cut = max(0, int(cut_length / h_spacing))
+    # Friction coefficient for wood/MDF on spoilboard
+    friction_coeff = 0.3
+    max_resistive_force = hold_down_force * friction_coeff
 
-        # Fraction of holes lost when fully through
-        if pct >= 100:
-            holes_lost = holes_along_cut
-        else:
-            holes_lost = 0  # onion skin maintains seal
+    # Movement risk ratio
+    movement_risk = cutting_force_lateral / max_resistive_force if max_resistive_force > 0 else 99
 
-        active_holes = total_holes - holes_lost
-        active_vacuum_area = active_holes * hole_area
+    # Safety factor
+    safety_factor = hold_down_force / cutting_force_lateral if cutting_force_lateral > 0 else 99
 
-        # Hold-down force = vacuum pressure × effective area + part weight
-        hold_down_force = vacuum_psi * active_vacuum_area + part_weight
+    # Quality score (1.0 = no risk, 0.0 = certain movement)
+    quality_score = max(0, min(1.0, 1.0 - movement_risk))
 
-        # Effective cutting force at this depth
-        if pct > 0:
-            effective_cut_force = cutting_force_lateral * (pct / 100.0)
-        else:
-            effective_cut_force = 0
+    # Recommendation
+    needs_tabs = "YES - TABS REQUIRED" if movement_risk >= 1.0 else "NO - Vacuum Sufficient"
 
-        # Safety factor
-        if effective_cut_force > 0:
-            safety_factor = hold_down_force / effective_cut_force
-        else:
-            safety_factor = 99.0  # no cutting force = safe
+    results.append({
+        "Total Holes Under Part": total_holes,
+        "Perimeter Holes Lost": perimeter_holes_lost,
+        "Active Holes After Cut-Out": active_holes,
+        "Total Vacuum Area (in²)": round(total_vacuum_area, 2),
+        "Active Vacuum Area (in²)": round(active_vacuum_area, 2),
+        "Hold-Down Force (lb)": round(hold_down_force, 2),
+        "Max Resistive Force (lb)": round(max_resistive_force, 2),
+        "Cutting Force (lb)": round(cutting_force_lateral, 2),
+        "Safety Factor": round(safety_factor, 2),
+        "Movement Risk Ratio": round(movement_risk, 3),
+        "Quality Score": round(quality_score, 3),
+        "Tabs Required?": needs_tabs,
+    })
 
-        # Risk of movement (friction coefficient ~0.3 for wood on spoilboard)
-        friction_coeff = 0.3
-        max_resistive_force = hold_down_force * friction_coeff
-        movement_risk = effective_cut_force / max_resistive_force if max_resistive_force > 0 else 0
-
-        # Quality score (1.0 = no risk, 0.0 = certain movement)
-        quality_score = max(0, min(1.0, 1.0 - movement_risk))
-
-        results.append({
-            "Cut-Through (%)": pct,
-            "Depth of Cut (in)": round(depth_of_cut, 4),
-            "Active Holes": active_holes,
-            "Hold-Down Force (lb)": round(hold_down_force, 2),
-            "Cutting Force (lb)": round(effective_cut_force, 2),
-            "Safety Factor": round(safety_factor, 2),
-            "Movement Risk Ratio": round(movement_risk, 3),
-            "Quality Score": round(quality_score, 3),
-        })
-
-    return pd.DataFrame(results), total_holes, part_area, part_weight, total_vacuum_area
+    return pd.DataFrame(results), total_holes, part_area, part_weight, total_vacuum_area, active_holes
 
 
 def generate_multi_part_tradespace(vacuum_psi, part_w, part_t, mat_density,
@@ -202,98 +221,82 @@ def generate_multi_part_tradespace(vacuum_psi, part_w, part_t, mat_density,
 
 
 # --- Run Analysis ---
-df_cut, total_holes, part_area, part_weight, vacuum_area = compute_tradespace(
+df_cut, total_holes, part_area, part_weight, vacuum_area, active_holes = compute_tradespace(
     holding_force_psi, part_length, part_width, part_thickness, material_density,
     hole_spacing, hole_diameter, tool_diameter, feed_rate, spindle_speed, num_flutes
 )
 
 # --- Display Metrics ---
-st.subheader("System Overview")
+st.subheader("Current Configuration Analysis")
 col1, col2, col3, col4, col5 = st.columns(5)
 col1.metric("Vacuum Pressure", f"{vacuum_pressure_inHg} inHg")
 col2.metric("Part Area", f"{part_area:.1f} in²")
 col3.metric("Part Weight", f"{part_weight:.2f} lb")
-col4.metric("Vacuum Holes Under Part", f"{total_holes}")
-col5.metric("Total Vacuum Area", f"{vacuum_area:.2f} in²")
+col4.metric("Total Holes", f"{total_holes}")
+col5.metric("Active After Cut", f"{active_holes}")
+
+st.markdown("---")
+
+# Display result prominently
+result_row = df_cut.iloc[0]
+if result_row["Movement Risk Ratio"] >= 1.0:
+    st.error(f"⚠️ **{result_row['Tabs Required?']}** — Hold-down force insufficient after cut-out.")
+else:
+    st.success(f"✅ **{result_row['Tabs Required?']}** — Part will stay in place.")
+
+col_a, col_b, col_c = st.columns(3)
+col_a.metric("Hold-Down Force", f"{result_row['Hold-Down Force (lb)']:.2f} lb")
+col_b.metric("Cutting Force", f"{result_row['Cutting Force (lb)']:.2f} lb")
+col_c.metric("Safety Factor", f"{result_row['Safety Factor']:.2f}", 
+             delta="Safe" if result_row['Safety Factor'] > 1.5 else "At Risk",
+             delta_color="normal" if result_row['Safety Factor'] > 1.5 else "inverse")
 
 st.markdown("---")
 
 # --- Tab Layout ---
-tab1, tab2, tab3 = st.tabs([
-    "Cut-Through Analysis",
-    "Part Size Tradespace",
-    "Data Tables"
+tab1, tab2 = st.tabs([
+    "Current Part Analysis",
+    "Part Size Tradespace"
 ])
 
 with tab1:
-    st.subheader("Hold-Down Force vs Cutting Force During Through-Cut")
-
-    fig1 = go.Figure()
-    fig1.add_trace(go.Scatter(
-        x=df_cut["Cut-Through (%)"],
-        y=df_cut["Hold-Down Force (lb)"],
-        name="Hold-Down Force (lb)",
-        mode="lines+markers",
-        line=dict(color="blue", width=2),
-    ))
-    fig1.add_trace(go.Scatter(
-        x=df_cut["Cut-Through (%)"],
-        y=df_cut["Cutting Force (lb)"],
-        name="Cutting Force (lb)",
-        mode="lines+markers",
-        line=dict(color="red", width=2),
-    ))
-    fig1.update_layout(
-        xaxis_title="Cut-Through Percentage (%)",
-        yaxis_title="Force (lb)",
-        height=450,
-        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
-    )
-    st.plotly_chart(fig1, use_container_width=True)
-
-    # Quality & Safety Plot
-    col_a, col_b = st.columns(2)
-
-    with col_a:
-        fig2 = px.line(
-            df_cut, x="Cut-Through (%)", y="Safety Factor",
-            title="Safety Factor vs Cut Depth",
-            markers=True,
-        )
-        fig2.add_hline(y=1.0, line_dash="dash", line_color="red",
-                       annotation_text="Movement Threshold")
-        fig2.update_layout(height=350)
-        st.plotly_chart(fig2, use_container_width=True)
-
-    with col_b:
-        fig3 = px.line(
-            df_cut, x="Cut-Through (%)", y="Quality Score",
-            title="Part Quality Score vs Cut Depth",
-            markers=True,
-            color_discrete_sequence=["green"],
-        )
-        fig3.add_hline(y=0.0, line_dash="dash", line_color="red",
-                       annotation_text="Part Will Move")
-        fig3.update_layout(height=350)
-        st.plotly_chart(fig3, use_container_width=True)
-
-    # Key finding
-    critical_row = df_cut[df_cut["Movement Risk Ratio"] >= 1.0]
-    if not critical_row.empty:
-        critical_pct = critical_row.iloc[0]["Cut-Through (%)"]
-        st.error(
-            f"⚠️ Part movement predicted at **{critical_pct}% cut-through**. "
-            f"Consider onion-skin cuts, tabs, or increasing vacuum pressure."
-        )
-    else:
-        st.success(
-            "✅ Hold-down force is sufficient across all cut depths for this configuration."
-        )
+    st.subheader("Detailed Breakdown (100% Cut-Out)")
+    
+    st.dataframe(df_cut.T, use_container_width=True)
+    
+    st.markdown("### Force Balance")
+    st.markdown(f"""
+    - **Hold-down force available:** {result_row['Hold-Down Force (lb)']:.2f} lb
+    - **Maximum resistive force (with friction):** {result_row['Max Resistive Force (lb)']:.2f} lb
+    - **Cutting force to resist:** {result_row['Cutting Force (lb)']:.2f} lb
+    - **Movement risk ratio:** {result_row['Movement Risk Ratio']:.3f} (>1.0 means part will move)
+    
+    **Interpretation:**  
+    {'⚠️ Part will likely shift or fly off. Use tabs or increase vacuum pressure.' if result_row['Movement Risk Ratio'] >= 1.0 else '✅ Vacuum hold-down is sufficient. No tabs needed.'}
+    """)
+    
+    st.markdown("### What affects hold-down?")
+    st.markdown("""
+    **Increases hold-down:**
+    - Higher vacuum pressure (more negative inHg)
+    - Larger part area (more holes engaged)
+    - Closer hole spacing (more holes per area)
+    - Larger hole diameter (more suction area)
+    
+    **Increases cutting force:**
+    - Thicker material
+    - Higher feed rate
+    - Larger tool diameter
+    - Lower spindle speed (higher chip load)
+    """)
 
 with tab2:
     st.subheader("Part Size Tradespace (Through-Cut Scenario)")
     st.markdown(
-        "This shows which part sizes are at risk of movement when fully cut through."
+        """
+        This analysis shows which part sizes are at risk of movement when fully cut through.  
+        Use it to identify problematic configurations and plan tab placement for multiple part types.
+        """
     )
 
     df_parts = generate_multi_part_tradespace(
@@ -314,6 +317,14 @@ with tab2:
     )
     fig4.update_layout(height=500)
     st.plotly_chart(fig4, use_container_width=True)
+    
+    st.markdown("""
+    **How to read this chart:**
+    - **Green points:** Vacuum hold-down is sufficient, no tabs needed
+    - **Red points:** Part will move, tabs are required
+    - **Size of point:** Larger = higher safety factor (more margin)
+    - Hover over points to see detailed force calculations
+    """)
 
     # Heatmap
     pivot = df_parts.pivot_table(
@@ -329,6 +340,14 @@ with tab2:
     )
     fig5.update_layout(height=400)
     st.plotly_chart(fig5, use_container_width=True)
+    
+    st.markdown("""
+    **Heatmap interpretation:**
+    - **Green cells (>1.5):** Safe with good margin
+    - **Yellow cells (1.0-1.5):** Marginally safe, consider tabs
+    - **Red cells (<1.0):** Tabs required
+    - Darker green = higher safety factor = more forgiving
+    """)
 
     at_risk = df_parts[df_parts["Part Moves"] == "YES"]
     if not at_risk.empty:
@@ -338,23 +357,3 @@ with tab2:
         )
     else:
         st.success("✅ All part sizes maintain adequate hold-down during through-cut.")
-
-with tab3:
-    st.subheader("Cut-Through Analysis Data")
-    st.dataframe(df_cut, use_container_width=True)
-
-    st.subheader("Part Size Tradespace Data")
-    st.dataframe(df_parts, use_container_width=True)
-
-    st.download_button(
-        "Download Cut-Through Data (CSV)",
-        df_cut.to_csv(index=False),
-        "cut_through_analysis.csv",
-        "text/csv",
-    )
-    st.download_button(
-        "Download Part Size Data (CSV)",
-        df_parts.to_csv(index=False),
-        "part_size_tradespace.csv",
-        "text/csv",
-    )
