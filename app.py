@@ -203,7 +203,7 @@ def generate_multi_part_tradespace(vacuum_psi, part_w, part_t, mat_density,
 
 # --- Run Analysis ---
 df_cut, total_holes, part_area, part_weight, vacuum_area = compute_tradespace(
-    vacuum_pressure_psi, part_length, part_width, part_thickness, material_density,
+    holding_force_psi, part_length, part_width, part_thickness, material_density,
     hole_spacing, hole_diameter, tool_diameter, feed_rate, spindle_speed, num_flutes
 )
 
@@ -297,7 +297,7 @@ with tab2:
     )
 
     df_parts = generate_multi_part_tradespace(
-        vacuum_pressure_psi, part_width, part_thickness, material_density,
+        holding_force_psi, part_width, part_thickness, material_density,
         hole_spacing, hole_diameter, tool_diameter, feed_rate, spindle_speed, num_flutes
     )
 
