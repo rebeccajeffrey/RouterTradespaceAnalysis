@@ -18,19 +18,24 @@ st.sidebar.header("System Parameters")
 st.sidebar.markdown("---")
 
 vacuum_pressure_inHg = st.sidebar.slider(
-    "Vacuum Pressure (in Hg)", 5.0, 25.0, 15.0, 0.5,
-    help="Average vacuum pressure exerted by the table"
+    "Vacuum Pressure (in Hg)", -25.0, -10.0, -15.0, 0.5,
+    help="Vacuum pressure (negative value, typical range -12 to -23 inHg)"
 )
 
-# Convert inHg to PSI (1 inHg ≈ 0.4912 PSI)
-vacuum_pressure_psi = vacuum_pressure_inHg * 0.4912
+# Use actual hold-down equation: y = 5.3926x + 8.7524
+# y = holding force in pounds per square foot
+# x = vacuum pressure in inches of mercury
+holding_force_psf = 5.3926 * vacuum_pressure_inHg + 8.7524
+
+# Convert to psi (divide by 144 since 1 ft² = 144 in²)
+holding_force_psi = holding_force_psf / 144.0
 
 st.sidebar.markdown("---")
 st.sidebar.header("Part & Table Configuration")
 
 part_length = st.sidebar.number_input("Part Length (in)", 1.0, 48.0, 12.0, 0.5)
 part_width = st.sidebar.number_input("Part Width (in)", 1.0, 48.0, 8.0, 0.5)
-part_thickness = st.sidebar.number_input("Part Thickness (in)", 0.125, 2.0, 0.75, 0.125)
+part_thickness = st.sidebar.number_input("Part Thickness (in)", 0.25, 3.0, 0.75, 0.25)
 material_density = st.sidebar.number_input(
     "Material Density (lb/in³)", 0.01, 0.10, 0.025, 0.005,
     help="MDF ≈ 0.028, Plywood ≈ 0.022, Hardwood ≈ 0.025"
