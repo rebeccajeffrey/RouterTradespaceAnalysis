@@ -4,158 +4,352 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 
-st.set_page_config(page_title="Tradespace Analysis", layout="wide")
+st.set_page_config(page_title="Router Vacuum Hold-Down Tradespace", layout="wide")
 
-st.title("Tradespace Analysis Tool")
+st.title("Router Vacuum Hold-Down Pressure Analysis")
 st.markdown("""
-Explore design alternatives across competing objectives. Upload your data or use
-the built-in example to visualize the tradespace and identify Pareto-optimal solutions.
+Analyze the tradespace of CNC router vacuum hold-down configurations to determine
+if through-cutting causes part movement due to pressure loss and tool forces.
+The goal is to maintain part quality by ensuring adequate hold-down force throughout the cut.
 """)
 
-
-# --- Helper Functions ---
-def compute_pareto_front(df, obj1, obj2, maximize_obj1, maximize_obj2):
-    """Identify Pareto-optimal points given two objectives."""
-    points = df[[obj1, obj2]].values.copy()
-
-    # Flip signs so we always minimize internally
-    if maximize_obj1:
-        points[:, 0] = -points[:, 0]
-    if maximize_obj2:
-        points[:, 1] = -points[:, 1]
-
-    is_pareto = np.ones(len(points), dtype=bool)
-    for i in range(len(points)):
-        if not is_pareto[i]:
-            continue
-        for j in range(len(points)):
-            if i == j or not is_pareto[j]:
-                continue
-            # j dominates i if j <= i in all objectives and j < i in at least one
-            if (points[j] <= points[i]).all() and (points[j] < points[i]).any():
-                is_pareto[i] = False
-                break
-
-    return is_pareto
-
-
-def generate_example_data(n=50):
-    """Generate synthetic tradespace data for demonstration."""
-    np.random.seed(42)
-    names = [f"Design {i+1}" for i in range(n)]
-    cost = np.random.uniform(10, 100, n)
-    performance = 80 - 0.5 * cost + np.random.normal(0, 10, n)
-    weight = np.random.uniform(5, 50, n)
-    reliability = np.clip(0.7 + 0.002 * cost + np.random.normal(0, 0.05, n), 0.5, 0.99)
-
-    return pd.DataFrame({
-        "Design": names,
-        "Cost ($M)": np.round(cost, 2),
-        "Performance": np.round(performance, 2),
-        "Weight (kg)": np.round(weight, 2),
-        "Reliability": np.round(reliability, 3),
-    })
-
-
-# --- Data Input ---
-st.sidebar.header("Data Source")
-data_source = st.sidebar.radio("Choose data source:", ["Example Data", "Upload CSV"])
-
-if data_source == "Upload CSV":
-    uploaded_file = st.sidebar.file_uploader("Upload your tradespace CSV", type=["csv"])
-    if uploaded_file is not None:
-        df = pd.read_csv(uploaded_file)
-    else:
-        st.info("Please upload a CSV file with your design alternatives and attributes.")
-        st.stop()
-else:
-    df = generate_example_data()
-
+# --- Constants & Parameters ---
+st.sidebar.header("System Parameters")
 st.sidebar.markdown("---")
-st.sidebar.header("Axis Configuration")
 
-numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-
-if len(numeric_cols) < 2:
-    st.error("Need at least 2 numeric columns for tradespace analysis.")
-    st.stop()
-
-x_axis = st.sidebar.selectbox("X-Axis (Objective 1)", numeric_cols, index=0)
-y_axis = st.sidebar.selectbox("Y-Axis (Objective 2)", numeric_cols, index=1)
-
-maximize_x = st.sidebar.checkbox(f"Maximize {x_axis}", value=False)
-maximize_y = st.sidebar.checkbox(f"Maximize {y_axis}", value=True)
-
-# Optional color/size dimensions
-color_col = st.sidebar.selectbox("Color by", ["None"] + numeric_cols, index=0)
-size_col = st.sidebar.selectbox("Size by", ["None"] + numeric_cols, index=0)
-
-# --- Pareto Front ---
-pareto_mask = compute_pareto_front(df, x_axis, y_axis, maximize_x, maximize_y)
-df["Pareto Optimal"] = pareto_mask
-
-# --- Visualization ---
-col1, col2 = st.columns([2, 1])
-
-with col1:
-    st.subheader("Tradespace Plot")
-
-    fig = px.scatter(
-        df,
-        x=x_axis,
-        y=y_axis,
-        color=color_col if color_col != "None" else None,
-        size=size_col if size_col != "None" else None,
-        hover_data=df.columns.tolist(),
-        color_continuous_scale="Viridis",
-    )
-
-    # Highlight Pareto front
-    pareto_df = df[df["Pareto Optimal"]].sort_values(x_axis)
-    fig.add_trace(
-        go.Scatter(
-            x=pareto_df[x_axis],
-            y=pareto_df[y_axis],
-            mode="lines+markers",
-            name="Pareto Front",
-            line=dict(color="red", width=2, dash="dash"),
-            marker=dict(size=10, symbol="star", color="red"),
-        )
-    )
-
-    fig.update_layout(height=550)
-    st.plotly_chart(fig, use_container_width=True)
-
-with col2:
-    st.subheader("Summary Statistics")
-    st.metric("Total Designs", len(df))
-    st.metric("Pareto-Optimal Designs", int(pareto_mask.sum()))
-    st.metric(f"{x_axis} Range", f"{df[x_axis].min():.2f} – {df[x_axis].max():.2f}")
-    st.metric(f"{y_axis} Range", f"{df[y_axis].min():.2f} – {df[y_axis].max():.2f}")
-
-# --- Data Table ---
-st.subheader("Design Alternatives")
-show_pareto_only = st.checkbox("Show Pareto-optimal designs only")
-
-if show_pareto_only:
-    st.dataframe(df[df["Pareto Optimal"]], use_container_width=True)
-else:
-    st.dataframe(df, use_container_width=True)
-
-# --- Parallel Coordinates ---
-st.subheader("Parallel Coordinates")
-selected_dims = st.multiselect(
-    "Select dimensions to display",
-    numeric_cols,
-    default=numeric_cols[:4] if len(numeric_cols) >= 4 else numeric_cols,
+vacuum_pressure_inHg = st.sidebar.slider(
+    "Vacuum Pressure (in Hg)", 5.0, 25.0, 15.0, 0.5,
+    help="Average vacuum pressure exerted by the table"
 )
 
-if selected_dims:
-    fig_parallel = px.parallel_coordinates(
-        df,
-        dimensions=selected_dims,
-        color=selected_dims[0],
-        color_continuous_scale="Turbo",
+# Convert inHg to PSI (1 inHg ≈ 0.4912 PSI)
+vacuum_pressure_psi = vacuum_pressure_inHg * 0.4912
+
+st.sidebar.markdown("---")
+st.sidebar.header("Part & Table Configuration")
+
+part_length = st.sidebar.number_input("Part Length (in)", 1.0, 48.0, 12.0, 0.5)
+part_width = st.sidebar.number_input("Part Width (in)", 1.0, 48.0, 8.0, 0.5)
+part_thickness = st.sidebar.number_input("Part Thickness (in)", 0.125, 2.0, 0.75, 0.125)
+material_density = st.sidebar.number_input(
+    "Material Density (lb/in³)", 0.01, 0.10, 0.025, 0.005,
+    help="MDF ≈ 0.028, Plywood ≈ 0.022, Hardwood ≈ 0.025"
+)
+
+hole_spacing = st.sidebar.number_input(
+    "Vacuum Hole Spacing (in)", 0.5, 6.0, 2.0, 0.25,
+    help="Distance between vacuum holes on the table grid"
+)
+hole_diameter = st.sidebar.number_input(
+    "Vacuum Hole Diameter (in)", 0.125, 0.5, 0.25, 0.0625
+)
+
+st.sidebar.markdown("---")
+st.sidebar.header("Tool Parameters")
+
+tool_diameter = st.sidebar.number_input("Tool Diameter (in)", 0.125, 1.0, 0.25, 0.0625)
+feed_rate = st.sidebar.number_input("Feed Rate (in/min)", 50, 800, 300, 25)
+spindle_speed = st.sidebar.number_input("Spindle Speed (RPM)", 8000, 30000, 18000, 1000)
+num_flutes = st.sidebar.selectbox("Number of Flutes", [1, 2, 3], index=1)
+
+
+# --- Physics Calculations ---
+def compute_tradespace(vacuum_psi, part_l, part_w, part_t, mat_density,
+                       h_spacing, h_dia, t_dia, feed, rpm, flutes):
+    """
+    Compute hold-down force vs cutting force across a range of through-cut scenarios.
+    """
+    results = []
+
+    part_area = part_l * part_w  # in²
+    part_weight = part_area * part_t * mat_density  # lb
+
+    # Number of vacuum holes under the part
+    holes_x = max(1, int(part_l / h_spacing))
+    holes_y = max(1, int(part_w / h_spacing))
+    total_holes = holes_x * holes_y
+    hole_area = np.pi * (h_dia / 2) ** 2  # area per hole in²
+
+    # Total effective vacuum area (holes exposed to vacuum)
+    total_vacuum_area = total_holes * hole_area  # in²
+
+    # Chip load calculation
+    chip_load = feed / (rpm * flutes)  # in/tooth
+
+    # Approximate lateral cutting force (tangential)
+    # Using simplified specific cutting force model
+    # Fc = Kc * chip_area, Kc for wood ~15,000-25,000 PSI
+    Kc = 18000  # specific cutting force for wood/composite (PSI)
+    chip_area = chip_load * part_t  # in² (width of cut = thickness in through-cut)
+    cutting_force_lateral = Kc * chip_area  # lb
+
+    # Vary the percentage of through-cut (how much material is left as onion skin)
+    cut_through_percentages = np.arange(0, 105, 5)  # 0% to 100%
+
+    for pct in cut_through_percentages:
+        depth_of_cut = part_t * (pct / 100.0)
+
+        # When cutting through, some vacuum holes along the cut path lose pressure
+        # Estimate holes compromised by the cut (along one edge)
+        cut_length = part_l  # assume cut runs full length
+        holes_along_cut = max(0, int(cut_length / h_spacing))
+
+        # Fraction of holes lost when fully through
+        if pct >= 100:
+            holes_lost = holes_along_cut
+        else:
+            holes_lost = 0  # onion skin maintains seal
+
+        active_holes = total_holes - holes_lost
+        active_vacuum_area = active_holes * hole_area
+
+        # Hold-down force = vacuum pressure × effective area + part weight
+        hold_down_force = vacuum_psi * active_vacuum_area + part_weight
+
+        # Effective cutting force at this depth
+        if pct > 0:
+            effective_cut_force = cutting_force_lateral * (pct / 100.0)
+        else:
+            effective_cut_force = 0
+
+        # Safety factor
+        if effective_cut_force > 0:
+            safety_factor = hold_down_force / effective_cut_force
+        else:
+            safety_factor = 99.0  # no cutting force = safe
+
+        # Risk of movement (friction coefficient ~0.3 for wood on spoilboard)
+        friction_coeff = 0.3
+        max_resistive_force = hold_down_force * friction_coeff
+        movement_risk = effective_cut_force / max_resistive_force if max_resistive_force > 0 else 0
+
+        # Quality score (1.0 = no risk, 0.0 = certain movement)
+        quality_score = max(0, min(1.0, 1.0 - movement_risk))
+
+        results.append({
+            "Cut-Through (%)": pct,
+            "Depth of Cut (in)": round(depth_of_cut, 4),
+            "Active Holes": active_holes,
+            "Hold-Down Force (lb)": round(hold_down_force, 2),
+            "Cutting Force (lb)": round(effective_cut_force, 2),
+            "Safety Factor": round(safety_factor, 2),
+            "Movement Risk Ratio": round(movement_risk, 3),
+            "Quality Score": round(quality_score, 3),
+        })
+
+    return pd.DataFrame(results), total_holes, part_area, part_weight, total_vacuum_area
+
+
+def generate_multi_part_tradespace(vacuum_psi, part_w, part_t, mat_density,
+                                   h_spacing, h_dia, t_dia, feed, rpm, flutes):
+    """
+    Generate tradespace across varying part sizes and cut configurations.
+    """
+    results = []
+    part_lengths = np.arange(2, 26, 2)
+    part_widths = np.arange(2, 14, 2)
+
+    for pl in part_lengths:
+        for pw in part_widths:
+            part_area = pl * pw
+            part_weight = part_area * part_t * mat_density
+
+            holes_x = max(1, int(pl / h_spacing))
+            holes_y = max(1, int(pw / h_spacing))
+            total_holes = holes_x * holes_y
+            hole_area = np.pi * (h_dia / 2) ** 2
+
+            # Through-cut scenario: lose holes along longest edge
+            holes_along_cut = max(0, int(pl / h_spacing))
+            active_holes = total_holes - holes_along_cut
+            active_vacuum_area = active_holes * hole_area
+
+            hold_down_force = vacuum_psi * active_vacuum_area + part_weight
+
+            # Cutting force
+            chip_load = feed / (rpm * flutes)
+            chip_area = chip_load * part_t
+            Kc = 18000
+            cutting_force = Kc * chip_area
+
+            friction_coeff = 0.3
+            max_resistive = hold_down_force * friction_coeff
+            movement_risk = cutting_force / max_resistive if max_resistive > 0 else 99
+
+            quality_score = max(0, min(1.0, 1.0 - movement_risk))
+            safety_factor = hold_down_force / cutting_force if cutting_force > 0 else 99
+
+            results.append({
+                "Part Length (in)": pl,
+                "Part Width (in)": pw,
+                "Part Area (in²)": part_area,
+                "Total Holes": total_holes,
+                "Active Holes (through-cut)": active_holes,
+                "Hold-Down Force (lb)": round(hold_down_force, 2),
+                "Cutting Force (lb)": round(cutting_force, 2),
+                "Safety Factor": round(safety_factor, 2),
+                "Movement Risk Ratio": round(movement_risk, 3),
+                "Quality Score": round(quality_score, 3),
+                "Part Moves": "YES" if movement_risk >= 1.0 else "NO",
+            })
+
+    return pd.DataFrame(results)
+
+
+# --- Run Analysis ---
+df_cut, total_holes, part_area, part_weight, vacuum_area = compute_tradespace(
+    vacuum_pressure_psi, part_length, part_width, part_thickness, material_density,
+    hole_spacing, hole_diameter, tool_diameter, feed_rate, spindle_speed, num_flutes
+)
+
+# --- Display Metrics ---
+st.subheader("System Overview")
+col1, col2, col3, col4, col5 = st.columns(5)
+col1.metric("Vacuum Pressure", f"{vacuum_pressure_inHg} inHg")
+col2.metric("Part Area", f"{part_area:.1f} in²")
+col3.metric("Part Weight", f"{part_weight:.2f} lb")
+col4.metric("Vacuum Holes Under Part", f"{total_holes}")
+col5.metric("Total Vacuum Area", f"{vacuum_area:.2f} in²")
+
+st.markdown("---")
+
+# --- Tab Layout ---
+tab1, tab2, tab3 = st.tabs([
+    "Cut-Through Analysis",
+    "Part Size Tradespace",
+    "Data Tables"
+])
+
+with tab1:
+    st.subheader("Hold-Down Force vs Cutting Force During Through-Cut")
+
+    fig1 = go.Figure()
+    fig1.add_trace(go.Scatter(
+        x=df_cut["Cut-Through (%)"],
+        y=df_cut["Hold-Down Force (lb)"],
+        name="Hold-Down Force (lb)",
+        mode="lines+markers",
+        line=dict(color="blue", width=2),
+    ))
+    fig1.add_trace(go.Scatter(
+        x=df_cut["Cut-Through (%)"],
+        y=df_cut["Cutting Force (lb)"],
+        name="Cutting Force (lb)",
+        mode="lines+markers",
+        line=dict(color="red", width=2),
+    ))
+    fig1.update_layout(
+        xaxis_title="Cut-Through Percentage (%)",
+        yaxis_title="Force (lb)",
+        height=450,
+        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
     )
-    fig_parallel.update_layout(height=400)
-    st.plotly_chart(fig_parallel, use_container_width=True)
+    st.plotly_chart(fig1, use_container_width=True)
+
+    # Quality & Safety Plot
+    col_a, col_b = st.columns(2)
+
+    with col_a:
+        fig2 = px.line(
+            df_cut, x="Cut-Through (%)", y="Safety Factor",
+            title="Safety Factor vs Cut Depth",
+            markers=True,
+        )
+        fig2.add_hline(y=1.0, line_dash="dash", line_color="red",
+                       annotation_text="Movement Threshold")
+        fig2.update_layout(height=350)
+        st.plotly_chart(fig2, use_container_width=True)
+
+    with col_b:
+        fig3 = px.line(
+            df_cut, x="Cut-Through (%)", y="Quality Score",
+            title="Part Quality Score vs Cut Depth",
+            markers=True,
+            color_discrete_sequence=["green"],
+        )
+        fig3.add_hline(y=0.0, line_dash="dash", line_color="red",
+                       annotation_text="Part Will Move")
+        fig3.update_layout(height=350)
+        st.plotly_chart(fig3, use_container_width=True)
+
+    # Key finding
+    critical_row = df_cut[df_cut["Movement Risk Ratio"] >= 1.0]
+    if not critical_row.empty:
+        critical_pct = critical_row.iloc[0]["Cut-Through (%)"]
+        st.error(
+            f"⚠️ Part movement predicted at **{critical_pct}% cut-through**. "
+            f"Consider onion-skin cuts, tabs, or increasing vacuum pressure."
+        )
+    else:
+        st.success(
+            "✅ Hold-down force is sufficient across all cut depths for this configuration."
+        )
+
+with tab2:
+    st.subheader("Part Size Tradespace (Through-Cut Scenario)")
+    st.markdown(
+        "This shows which part sizes are at risk of movement when fully cut through."
+    )
+
+    df_parts = generate_multi_part_tradespace(
+        vacuum_pressure_psi, part_width, part_thickness, material_density,
+        hole_spacing, hole_diameter, tool_diameter, feed_rate, spindle_speed, num_flutes
+    )
+
+    fig4 = px.scatter(
+        df_parts,
+        x="Part Length (in)",
+        y="Part Width (in)",
+        color="Quality Score",
+        size="Safety Factor",
+        hover_data=["Hold-Down Force (lb)", "Cutting Force (lb)",
+                    "Safety Factor", "Part Moves"],
+        color_continuous_scale="RdYlGn",
+        title="Part Size vs Quality Score (Green = Safe, Red = Will Move)",
+    )
+    fig4.update_layout(height=500)
+    st.plotly_chart(fig4, use_container_width=True)
+
+    # Heatmap
+    pivot = df_parts.pivot_table(
+        index="Part Width (in)", columns="Part Length (in)",
+        values="Safety Factor", aggfunc="mean"
+    )
+    fig5 = px.imshow(
+        pivot,
+        color_continuous_scale="RdYlGn",
+        title="Safety Factor Heatmap by Part Dimensions",
+        labels=dict(x="Part Length (in)", y="Part Width (in)", color="Safety Factor"),
+        aspect="auto",
+    )
+    fig5.update_layout(height=400)
+    st.plotly_chart(fig5, use_container_width=True)
+
+    at_risk = df_parts[df_parts["Part Moves"] == "YES"]
+    if not at_risk.empty:
+        st.warning(
+            f"⚠️ {len(at_risk)} of {len(df_parts)} part configurations "
+            f"are at risk of movement during through-cut."
+        )
+    else:
+        st.success("✅ All part sizes maintain adequate hold-down during through-cut.")
+
+with tab3:
+    st.subheader("Cut-Through Analysis Data")
+    st.dataframe(df_cut, use_container_width=True)
+
+    st.subheader("Part Size Tradespace Data")
+    st.dataframe(df_parts, use_container_width=True)
+
+    st.download_button(
+        "Download Cut-Through Data (CSV)",
+        df_cut.to_csv(index=False),
+        "cut_through_analysis.csv",
+        "text/csv",
+    )
+    st.download_button(
+        "Download Part Size Data (CSV)",
+        df_parts.to_csv(index=False),
+        "part_size_tradespace.csv",
+        "text/csv",
+    )
