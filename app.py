@@ -54,6 +54,9 @@ selected_part = st.sidebar.selectbox(
 # Load dimensions from selection
 default_dims = common_parts[selected_part]
 
+# Check if Peeler is selected to lock tool parameters
+is_peeler = (selected_part == "Peeler")
+
 part_length = st.sidebar.number_input(
     "Part Length (in)", 1.0, 48.0, default_dims["length"], 0.5,
     disabled=(selected_part != "Custom (enter dimensions below)")
@@ -82,10 +85,23 @@ hole_diameter = st.sidebar.number_input(
 st.sidebar.markdown("---")
 st.sidebar.header("Tool Parameters")
 
-tool_diameter = st.sidebar.number_input("Tool Diameter (in)", 0.125, 1.0, 0.25, 0.0625)
-feed_rate = st.sidebar.number_input("Feed Rate (in/min)", 50, 800, 300, 25)
-spindle_speed = st.sidebar.number_input("Spindle Speed (RPM)", 8000, 30000, 18000, 1000)
-num_flutes = st.sidebar.selectbox("Number of Flutes", [1, 2, 3], index=1)
+# Set Peeler-specific tool parameters or allow custom
+if is_peeler:
+    st.sidebar.info("🔒 Tool parameters locked for Peeler part")
+    tool_diameter = 0.25
+    num_flutes = 1
+    spindle_speed = 23500
+    feed_rate = 25
+    
+    st.sidebar.text(f"Tool Diameter: {tool_diameter} in")
+    st.sidebar.text(f"Flute Length: {num_flutes}")
+    st.sidebar.text(f"Spindle Speed: {spindle_speed} RPM")
+    st.sidebar.text(f"Feed Rate: {feed_rate} in/min")
+else:
+    tool_diameter = st.sidebar.number_input("Tool Diameter (in)", 0.125, 1.0, 0.25, 0.0625)
+    feed_rate = st.sidebar.number_input("Feed Rate (in/min)", 50, 800, 300, 25)
+    spindle_speed = st.sidebar.number_input("Spindle Speed (RPM)", 8000, 30000, 18000, 1000)
+    num_flutes = st.sidebar.selectbox("Number of Flutes", [1, 2, 3], index=1)
 
 
 # --- Physics Calculations ---
