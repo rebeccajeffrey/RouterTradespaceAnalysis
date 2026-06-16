@@ -389,7 +389,12 @@ with tab2:
     st.markdown(
         """
         This analysis shows which part sizes are at risk of movement when fully cut through.  
-        Use it to identify problematic configurations and plan tab placement for multiple part types.
+        
+        **What are "configurations"?** Each configuration is a unique combination of part length and width. 
+        The app tests a grid of sizes (e.g., 2"×2", 2"×4", 4"×2", 4"×4", etc.) to see which combinations 
+        will stay in place vs. which need tabs. Your current tool and material settings are applied to all sizes.
+        
+        Use this to identify problematic sizes and plan tab placement for multiple part types.
         """
     )
 
@@ -449,8 +454,15 @@ with tab2:
     at_risk = df_parts[df_parts["Part Moves"] == "YES"]
     if not at_risk.empty:
         st.warning(
-            f"⚠️ {len(at_risk)} of {len(df_parts)} part configurations "
-            f"are at risk of movement during through-cut."
+            f"⚠️ **{len(at_risk)} of {len(df_parts)} part size combinations require tabs**\n\n"
+            f"The tradespace tested {len(df_parts)} different part sizes (varying length and width). "
+            f"For {len(at_risk)} of these combinations, the cutting force exceeds the available "
+            f"vacuum hold-down force after the part is fully cut out, meaning the part will shift or fly off without tabs.\n\n"
+            f"**What this means:** These size/shape combinations need tabs to stay in place during cutting. "
+            f"The scatter plot and heatmap above show which specific sizes are at risk (red/yellow areas)."
         )
     else:
-        st.success("✅ All part sizes maintain adequate hold-down during through-cut.")
+        st.success(
+            f"✅ **All {len(df_parts)} part size combinations are safe without tabs**\n\n"
+            f"The vacuum hold-down force is sufficient for all tested part sizes with your current settings."
+        )
