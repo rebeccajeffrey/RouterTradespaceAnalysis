@@ -37,6 +37,7 @@ st.sidebar.header("Part & Table Configuration")
 # Common high-volume parts dropdown
 common_parts = {
     "Custom (enter dimensions below)": {"length": 12.0, "width": 8.0, "thickness": 0.75},
+    "Peeler": {"length": 12.0, "width": 3.0, "thickness": 1.0},
     "Part A": {"length": 12.0, "width": 8.0, "thickness": 0.75},
     "Part B": {"length": 16.0, "width": 10.0, "thickness": 0.5},
     "Part C": {"length": 24.0, "width": 12.0, "thickness": 1.0},
