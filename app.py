@@ -65,10 +65,72 @@ part_thickness = st.sidebar.number_input(
     "Part Thickness (in)", 0.25, 3.0, default_dims["thickness"], 0.25,
     disabled=(selected_part != "Custom (enter dimensions below)")
 )
-material_density = st.sidebar.number_input(
-    "Material Density (lb/in³)", 0.01, 0.15, 0.065, 0.005,
-    help="Typical aerospace composites: Phenolic ≈ 0.045-0.065, Fiberglass ≈ 0.065-0.075, Carbon fiber ≈ 0.055-0.060"
+st.sidebar.markdown("---")
+st.sidebar.header("Material Type")
+
+# Material-specific cutting force constants
+material_types = {
+    "Foam (PVC/PMI)": {
+        "Kc": 8000,
+        "density": 0.010,
+        "description": "Low-density structural foam"
+    },
+    "Honeycomb Core + Carbon Fiber": {
+        "Kc": 85000,
+        "density": 0.055,
+        "description": "Nomex/Aluminum honeycomb with carbon fiber face sheets"
+    },
+    "Honeycomb Core + Kevlar": {
+        "Kc": 95000,
+        "density": 0.050,
+        "description": "Nomex/Aluminum honeycomb with Kevlar face sheets"
+    },
+    "Phenolic Laminate": {
+        "Kc": 75000,
+        "density": 0.065,
+        "description": "Solid phenolic composite"
+    },
+    "Fiberglass Laminate": {
+        "Kc": 80000,
+        "density": 0.070,
+        "description": "Solid fiberglass (GFRP)"
+    },
+    "Custom": {
+        "Kc": 18000,
+        "density": 0.065,
+        "description": "Enter custom values below"
+    }
+}
+
+selected_material = st.sidebar.selectbox(
+    "Select Material Type",
+    list(material_types.keys()),
+    index=1,  # Default to Honeycomb + Carbon Fiber
+    help="Material type affects cutting force calculation"
 )
+
+material_config = material_types[selected_material]
+st.sidebar.caption(f"*{material_config['description']}*")
+
+if selected_material == "Custom":
+    Kc = st.sidebar.number_input(
+        "Specific Cutting Force Kc (psi)",
+        5000, 200000, material_config["Kc"], 5000,
+        help="Material-specific cutting force constant"
+    )
+    # Allow manual density override for custom
+    material_density = st.sidebar.number_input(
+        "Material Density (lb/in³)",
+        0.001, 0.20, material_config["density"], 0.005
+    )
+else:
+    Kc = material_config["Kc"]
+    # Auto-set density based on material, but allow override
+    material_density = st.sidebar.number_input(
+        "Material Density (lb/in³)",
+        0.001, 0.20, material_config["density"], 0.005,
+        help=f"Default for {selected_material}: {material_config['density']} lb/in³"
+    )
 
 hole_spacing_rows = st.sidebar.number_input(
     "Vacuum Row Spacing (in)", 0.5, 6.0, 1.5, 0.25,
@@ -111,7 +173,7 @@ else:
 
 # --- Physics Calculations ---
 def compute_tradespace(vacuum_psi, part_l, part_w, part_t, mat_density,
-                       h_spacing, h_dia, t_dia, feed, rpm, flutes):
+                       h_spacing, h_dia, t_dia, feed, rpm, flutes, Kc):
     """
     Compute hold-down force vs cutting force for fully cut-out parts.
     Assumption: part is 100% through-cut, vacuum seal is broken along perimeter.
@@ -136,8 +198,7 @@ def compute_tradespace(vacuum_psi, part_l, part_w, part_t, mat_density,
 
     # Approximate lateral cutting force (tangential)
     # Using simplified specific cutting force model
-    # Fc = Kc * chip_area, Kc for wood ~15,000-25,000 PSI
-    Kc = 18000  # specific cutting force for wood/composite (PSI)
+    # Fc = Kc * chip_area, where Kc is material-specific
     chip_area = chip_load * part_t  # in² (width of cut = thickness)
     cutting_force_lateral = Kc * chip_area  # lb
 
@@ -194,7 +255,7 @@ def compute_tradespace(vacuum_psi, part_l, part_w, part_t, mat_density,
 
 
 def generate_multi_part_tradespace(vacuum_psi, part_w, part_t, mat_density,
-                                   h_spacing, h_dia, t_dia, feed, rpm, flutes):
+                                   h_spacing, h_dia, t_dia, feed, rpm, flutes, Kc):
     """
     Generate tradespace across varying part sizes and cut configurations.
     """
@@ -227,7 +288,6 @@ def generate_multi_part_tradespace(vacuum_psi, part_w, part_t, mat_density,
             # Cutting force
             chip_load = feed / (rpm * flutes)
             chip_area = chip_load * part_t
-            Kc = 18000
             cutting_force = Kc * chip_area
 
             friction_coeff = 0.3
@@ -257,7 +317,7 @@ def generate_multi_part_tradespace(vacuum_psi, part_w, part_t, mat_density,
 # --- Run Analysis ---
 df_cut, total_holes, part_area, part_weight, vacuum_area, sealed_area = compute_tradespace(
     holding_force_psi, part_length, part_width, part_thickness, material_density,
-    hole_spacing, hole_diameter, tool_diameter, feed_rate, spindle_speed, num_flutes
+    hole_spacing, hole_diameter, tool_diameter, feed_rate, spindle_speed, num_flutes, Kc
 )
 
 # --- Display Metrics ---
@@ -335,7 +395,7 @@ with tab2:
 
     df_parts = generate_multi_part_tradespace(
         holding_force_psi, part_width, part_thickness, material_density,
-        hole_spacing, hole_diameter, tool_diameter, feed_rate, spindle_speed, num_flutes
+        hole_spacing, hole_diameter, tool_diameter, feed_rate, spindle_speed, num_flutes, Kc
     )
 
     # Cap safety factor for better visualization
