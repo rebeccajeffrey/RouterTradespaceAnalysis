@@ -71,27 +71,27 @@ st.sidebar.header("Material Type")
 # Material-specific cutting force constants
 material_types = {
     "Foam (PVC/PMI)": {
-        "Kc": 8000,
+        "Kc": 5000,
         "density": 0.010,
         "description": "Low-density structural foam"
     },
     "Honeycomb Core + Carbon Fiber": {
-        "Kc": 85000,
+        "Kc": 25000,
         "density": 0.055,
         "description": "Nomex/Aluminum honeycomb with carbon fiber face sheets"
     },
     "Honeycomb Core + Kevlar": {
-        "Kc": 95000,
+        "Kc": 30000,
         "density": 0.050,
         "description": "Nomex/Aluminum honeycomb with Kevlar face sheets"
     },
     "Phenolic Laminate": {
-        "Kc": 75000,
+        "Kc": 40000,
         "density": 0.065,
         "description": "Solid phenolic composite"
     },
     "Fiberglass Laminate": {
-        "Kc": 80000,
+        "Kc": 35000,
         "density": 0.070,
         "description": "Solid fiberglass (GFRP)"
     },
@@ -368,6 +368,25 @@ with tab1:
     **Interpretation:**  
     {'⚠️ Part will likely shift or fly off. Use tabs or increase vacuum pressure.' if result_row['Movement Risk Ratio'] >= 1.0 else '✅ Vacuum hold-down is sufficient. No tabs needed.'}
     """)
+    
+    # Add calculation details
+    with st.expander("📊 See Cutting Force Calculation Details"):
+        st.markdown(f"""
+        **Chip Load Calculation:**
+        - Feed rate: {feed_rate} in/min
+        - Spindle speed: {spindle_speed} RPM
+        - Number of flutes: {num_flutes}
+        - **Chip load = {feed_rate} ÷ ({spindle_speed} × {num_flutes}) = {feed_rate/(spindle_speed*num_flutes):.6f} in/tooth**
+        
+        **Cutting Force Calculation:**
+        - Specific cutting force (Kc): {Kc:,} psi (material: {selected_material})
+        - Part thickness: {part_thickness} in
+        - Chip area = chip load × thickness = {feed_rate/(spindle_speed*num_flutes):.6f} × {part_thickness} = {(feed_rate/(spindle_speed*num_flutes))*part_thickness:.6f} in²
+        - **Cutting force = Kc × chip area = {Kc:,} × {(feed_rate/(spindle_speed*num_flutes))*part_thickness:.6f} = {result_row['Cutting Force (lb)']:.2f} lb**
+        
+        *Note: If this seems too high or low, adjust Kc value in the Material Type section or select "Custom" to enter your own.*
+        """)
+    
     
     st.markdown("### What affects hold-down?")
     st.markdown("""
