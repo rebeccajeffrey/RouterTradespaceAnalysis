@@ -29,7 +29,8 @@ vacuum_pressure_inHg = st.sidebar.slider(
 holding_force_psf = 5.3926 * vacuum_pressure_inHg + 8.7524
 
 # Convert to psi (divide by 144 since 1 ft² = 144 in²)
-holding_force_psi = holding_force_psf / 144.0
+# Take absolute value since we're interested in magnitude of hold-down force
+holding_force_psi = abs(holding_force_psf / 144.0)
 
 st.sidebar.markdown("---")
 st.sidebar.header("Part & Table Configuration")
@@ -38,11 +39,6 @@ st.sidebar.header("Part & Table Configuration")
 common_parts = {
     "Custom (enter dimensions below)": {"length": 12.0, "width": 8.0, "thickness": 0.75},
     "Peeler": {"length": 12.0, "width": 3.0, "thickness": 1.0},
-    "Part A": {"length": 12.0, "width": 8.0, "thickness": 0.75},
-    "Part B": {"length": 16.0, "width": 10.0, "thickness": 0.5},
-    "Part C": {"length": 24.0, "width": 12.0, "thickness": 1.0},
-    "Part D": {"length": 8.0, "width": 6.0, "thickness": 0.5},
-    "Part E": {"length": 18.0, "width": 14.0, "thickness": 0.75},
 }
 
 selected_part = st.sidebar.selectbox(
@@ -70,8 +66,8 @@ part_thickness = st.sidebar.number_input(
     disabled=(selected_part != "Custom (enter dimensions below)")
 )
 material_density = st.sidebar.number_input(
-    "Material Density (lb/in³)", 0.01, 0.10, 0.025, 0.005,
-    help="MDF ≈ 0.028, Plywood ≈ 0.022, Hardwood ≈ 0.025"
+    "Material Density (lb/in³)", 0.01, 0.15, 0.065, 0.005,
+    help="Typical aerospace composites: Phenolic ≈ 0.045-0.065, Fiberglass ≈ 0.065-0.075, Carbon fiber ≈ 0.055-0.060"
 )
 
 hole_spacing_rows = st.sidebar.number_input(
@@ -84,9 +80,12 @@ hole_spacing_in_row = st.sidebar.number_input(
 )
 # Use average spacing for calculations (geometric mean of row and within-row spacing)
 hole_spacing = (hole_spacing_rows * hole_spacing_in_row) ** 0.5
-hole_diameter = st.sidebar.number_input(
-    "Vacuum Hole Diameter (in)", 0.125, 0.5, 0.25, 0.0625
+hole_diameter_mm = st.sidebar.number_input(
+    "Vacuum Hole Diameter (mm)", 3.0, 12.0, 6.35, 0.5,
+    help="Typical values: 6mm, 6.35mm (1/4\"), 8mm"
 )
+# Convert mm to inches for calculations
+hole_diameter = hole_diameter_mm / 25.4
 
 st.sidebar.markdown("---")
 st.sidebar.header("Tool Parameters")
@@ -327,12 +326,15 @@ with tab2:
         hole_spacing, hole_diameter, tool_diameter, feed_rate, spindle_speed, num_flutes
     )
 
+    # Cap safety factor for better visualization
+    df_parts["Safety Factor Capped"] = df_parts["Safety Factor"].clip(upper=10)
+    
     fig4 = px.scatter(
         df_parts,
         x="Part Length (in)",
         y="Part Width (in)",
         color="Quality Score",
-        size="Safety Factor",
+        size="Safety Factor Capped",
         hover_data=["Hold-Down Force (lb)", "Cutting Force (lb)",
                     "Safety Factor", "Part Moves"],
         color_continuous_scale="RdYlGn",
