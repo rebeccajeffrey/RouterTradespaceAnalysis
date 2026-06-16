@@ -141,16 +141,24 @@ def compute_tradespace(vacuum_psi, part_l, part_w, part_t, mat_density,
     chip_area = chip_load * part_t  # in² (width of cut = thickness)
     cutting_force_lateral = Kc * chip_area  # lb
 
-    # When part is fully cut out, perimeter holes lose vacuum
-    # Estimate: holes within one hole-spacing distance of perimeter are compromised
-    perimeter_holes_lost = int(part_perimeter / h_spacing)
+    # When part is fully cut out, perimeter loses vacuum seal
+    # Vacuum force acts on the remaining sealed part area, not just hole area
+    # Estimate the area that loses vacuum: assume a strip around perimeter loses seal
+    # Conservative estimate: lose ~0.5" strip around perimeter after cut-out
+    perimeter_strip_width = 0.5  # inches
     
-    # Calculate active holes after cut-out
-    active_holes = max(0, total_holes - perimeter_holes_lost)
-    active_vacuum_area = active_holes * hole_area
-
-    # Hold-down force = vacuum pressure × effective area + part weight
-    hold_down_force = vacuum_psi * active_vacuum_area + part_weight
+    # Calculate remaining sealed area
+    sealed_length = max(0, part_l - 2 * perimeter_strip_width)
+    sealed_width = max(0, part_w - 2 * perimeter_strip_width)
+    sealed_area = sealed_length * sealed_width  # in²
+    
+    # If part is too small, use reduced sealed area
+    if sealed_area < 0.1 * part_area:
+        sealed_area = 0.1 * part_area  # minimum 10% sealed
+    
+    # Hold-down force = vacuum pressure × sealed area + part weight
+    # vacuum_psi is already the holding force per square inch from the equation
+    hold_down_force = vacuum_psi * sealed_area + part_weight
 
     # Friction coefficient for wood/MDF on spoilboard
     friction_coeff = 0.3
@@ -170,10 +178,9 @@ def compute_tradespace(vacuum_psi, part_l, part_w, part_t, mat_density,
 
     results.append({
         "Total Holes Under Part": total_holes,
-        "Perimeter Holes Lost": perimeter_holes_lost,
-        "Active Holes After Cut-Out": active_holes,
+        "Sealed Area After Cut (in²)": round(sealed_area, 2),
+        "Part Area (in²)": round(part_area, 2),
         "Total Vacuum Area (in²)": round(total_vacuum_area, 2),
-        "Active Vacuum Area (in²)": round(active_vacuum_area, 2),
         "Hold-Down Force (lb)": round(hold_down_force, 2),
         "Max Resistive Force (lb)": round(max_resistive_force, 2),
         "Cutting Force (lb)": round(cutting_force_lateral, 2),
@@ -183,7 +190,7 @@ def compute_tradespace(vacuum_psi, part_l, part_w, part_t, mat_density,
         "Tabs Required?": needs_tabs,
     })
 
-    return pd.DataFrame(results), total_holes, part_area, part_weight, total_vacuum_area, active_holes
+    return pd.DataFrame(results), total_holes, part_area, part_weight, total_vacuum_area, sealed_area
 
 
 def generate_multi_part_tradespace(vacuum_psi, part_w, part_t, mat_density,
@@ -205,12 +212,17 @@ def generate_multi_part_tradespace(vacuum_psi, part_w, part_t, mat_density,
             total_holes = holes_x * holes_y
             hole_area = np.pi * (h_dia / 2) ** 2
 
-            # Through-cut scenario: lose holes along longest edge
-            holes_along_cut = max(0, int(pl / h_spacing))
-            active_holes = total_holes - holes_along_cut
-            active_vacuum_area = active_holes * hole_area
-
-            hold_down_force = vacuum_psi * active_vacuum_area + part_weight
+            # Through-cut scenario: vacuum seal broken around perimeter
+            # Calculate remaining sealed area (lose ~0.5" strip around perimeter)
+            perimeter_strip_width = 0.5
+            sealed_length = max(0, pl - 2 * perimeter_strip_width)
+            sealed_width = max(0, pw - 2 * perimeter_strip_width)
+            sealed_area = sealed_length * sealed_width
+            
+            if sealed_area < 0.1 * part_area:
+                sealed_area = 0.1 * part_area
+            
+            hold_down_force = vacuum_psi * sealed_area + part_weight
 
             # Cutting force
             chip_load = feed / (rpm * flutes)
@@ -229,8 +241,8 @@ def generate_multi_part_tradespace(vacuum_psi, part_w, part_t, mat_density,
                 "Part Length (in)": pl,
                 "Part Width (in)": pw,
                 "Part Area (in²)": part_area,
+                "Sealed Area (in²)": round(sealed_area, 2),
                 "Total Holes": total_holes,
-                "Active Holes (through-cut)": active_holes,
                 "Hold-Down Force (lb)": round(hold_down_force, 2),
                 "Cutting Force (lb)": round(cutting_force, 2),
                 "Safety Factor": round(safety_factor, 2),
@@ -243,7 +255,7 @@ def generate_multi_part_tradespace(vacuum_psi, part_w, part_t, mat_density,
 
 
 # --- Run Analysis ---
-df_cut, total_holes, part_area, part_weight, vacuum_area, active_holes = compute_tradespace(
+df_cut, total_holes, part_area, part_weight, vacuum_area, sealed_area = compute_tradespace(
     holding_force_psi, part_length, part_width, part_thickness, material_density,
     hole_spacing, hole_diameter, tool_diameter, feed_rate, spindle_speed, num_flutes
 )
@@ -253,9 +265,9 @@ st.subheader("Current Configuration Analysis")
 col1, col2, col3, col4, col5 = st.columns(5)
 col1.metric("Vacuum Pressure", f"{vacuum_pressure_inHg} inHg")
 col2.metric("Part Area", f"{part_area:.1f} in²")
-col3.metric("Part Weight", f"{part_weight:.2f} lb")
-col4.metric("Total Holes", f"{total_holes}")
-col5.metric("Active After Cut", f"{active_holes}")
+col3.metric("Sealed Area", f"{sealed_area:.1f} in²")
+col4.metric("Part Weight", f"{part_weight:.2f} lb")
+col5.metric("Total Holes", f"{total_holes}")
 
 st.markdown("---")
 
