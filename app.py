@@ -19,7 +19,7 @@ st.sidebar.header("System Parameters")
 st.sidebar.markdown("---")
 
 vacuum_pressure_inHg = st.sidebar.slider(
-    "Vacuum Pressure (in Hg)", -25.0, -10.0, -15.0, 0.5,
+    "Vacuum Pressure (in Hg)", -25.0, -10.0, -22.0, 0.5,
     help="Vacuum pressure (negative value, typical range -12 to -23 inHg)"
 )
 
@@ -74,10 +74,16 @@ material_density = st.sidebar.number_input(
     help="MDF ≈ 0.028, Plywood ≈ 0.022, Hardwood ≈ 0.025"
 )
 
-hole_spacing = st.sidebar.number_input(
-    "Vacuum Hole Spacing (in)", 0.5, 6.0, 2.0, 0.25,
-    help="Distance between vacuum holes on the table grid"
+hole_spacing_rows = st.sidebar.number_input(
+    "Vacuum Row Spacing (in)", 0.5, 6.0, 1.5, 0.25,
+    help="Distance between rows of vacuum holes"
 )
+hole_spacing_in_row = st.sidebar.number_input(
+    "Hole Spacing Within Row (in)", 0.25, 6.0, 0.5, 0.25,
+    help="Distance between holes within each row"
+)
+# Use average spacing for calculations (geometric mean of row and within-row spacing)
+hole_spacing = (hole_spacing_rows * hole_spacing_in_row) ** 0.5
 hole_diameter = st.sidebar.number_input(
     "Vacuum Hole Diameter (in)", 0.125, 0.5, 0.25, 0.0625
 )
