@@ -4,14 +4,14 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 
-st.set_page_config(page_title="Router Vacuum Hold-Down Tradespace", layout="wide")
+st.set_page_config(page_title="Tab or No Tab?", layout="wide")
 
-st.title("Router Vacuum Hold-Down Pressure Analysis")
+st.title("Tab or No Tab? 🔧")
 st.markdown("""
-**Decision Support: Do you need tabs, or will vacuum hold-down keep the part in place?**
+**Your go-to tool for deciding if parts need tabs during CNC routing.**
 
-All parts are fully cut through (100% depth). This tool calculates whether the remaining 
-vacuum hold-down force after cutting is sufficient to resist tool forces and prevent part movement.
+All parts are fully cut through (100% depth). This tool calculates whether vacuum hold-down 
+force is sufficient to keep parts in place, or if tabs are required to prevent movement and flyoff.
 """)
 
 # --- Constants & Parameters ---
@@ -67,7 +67,7 @@ part_thickness = st.sidebar.number_input(
 st.sidebar.markdown("---")
 st.sidebar.header("Material Type")
 
-# Material-specific cutting force constants
+# Material-specific Cut Force constants
 material_types = {
     "Foam (PVC/PMI)": {
         "Kc": 5000,
@@ -105,7 +105,7 @@ selected_material = st.sidebar.selectbox(
     "Select Material Type",
     list(material_types.keys()),
     index=1,  # Default to Honeycomb + Carbon Fiber
-    help="Material type affects cutting force calculation"
+    help="Material type affects Cut Force calculation"
 )
 
 material_config = material_types[selected_material]
@@ -113,9 +113,9 @@ st.sidebar.caption(f"*{material_config['description']}*")
 
 if selected_material == "Custom":
     Kc = st.sidebar.number_input(
-        "Specific Cutting Force Kc (psi)",
+        "Specific Cut Force Kc (psi)",
         5000, 200000, material_config["Kc"], 5000,
-        help="Material-specific cutting force constant"
+        help="Material-specific Cut Force constant"
     )
     # Allow manual density override for custom
     material_density = st.sidebar.number_input(
@@ -174,7 +174,7 @@ else:
 def compute_tradespace(vacuum_psi, part_l, part_w, part_t, mat_density,
                        h_spacing, h_dia, t_dia, feed, rpm, flutes, Kc):
     """
-    Compute hold-down force vs cutting force for fully cut-out parts.
+    Compute hold-down force vs Cut Force for fully cut-out parts.
     Assumption: part is 100% through-cut, vacuum seal is broken along perimeter.
     """
     results = []
@@ -195,8 +195,8 @@ def compute_tradespace(vacuum_psi, part_l, part_w, part_t, mat_density,
     # Chip load calculation
     chip_load = feed / (rpm * flutes)  # in/tooth
 
-    # Approximate lateral cutting force (tangential)
-    # Using simplified specific cutting force model
+    # Approximate lateral Cut Force (tangential)
+    # Using simplified specific Cut Force model
     # Fc = Kc * chip_area, where Kc is material-specific
     chip_area = chip_load * part_t  # in² (width of cut = thickness)
     cutting_force_lateral = Kc * chip_area  # lb
@@ -243,7 +243,7 @@ def compute_tradespace(vacuum_psi, part_l, part_w, part_t, mat_density,
         "Total Vacuum Area (in²)": round(total_vacuum_area, 2),
         "Hold-Down Force (lb)": round(hold_down_force, 2),
         "Max Resistive Force (lb)": round(max_resistive_force, 2),
-        "Cutting Force (lb)": round(cutting_force_lateral, 2),
+        "Cut Force (lb)": round(cutting_force_lateral, 2),
         "Safety Factor": round(safety_factor, 2),
         "Movement Risk Ratio": round(movement_risk, 3),
         "Quality Score": round(quality_score, 3),
@@ -284,7 +284,7 @@ def generate_multi_part_tradespace(vacuum_psi, part_w, part_t, mat_density,
             
             hold_down_force = vacuum_psi * sealed_area + part_weight
 
-            # Cutting force
+            # Cut Force
             chip_load = feed / (rpm * flutes)
             chip_area = chip_load * part_t
             cutting_force = Kc * chip_area
@@ -303,7 +303,7 @@ def generate_multi_part_tradespace(vacuum_psi, part_w, part_t, mat_density,
                 "Sealed Area (in²)": round(sealed_area, 2),
                 "Total Holes": total_holes,
                 "Hold-Down Force (lb)": round(hold_down_force, 2),
-                "Cutting Force (lb)": round(cutting_force, 2),
+                "Cut Force (lb)": round(cutting_force, 2),
                 "Safety Factor": round(safety_factor, 2),
                 "Movement Risk Ratio": round(movement_risk, 3),
                 "Quality Score": round(quality_score, 3),
@@ -339,7 +339,7 @@ else:
 
 col_a, col_b, col_c = st.columns(3)
 col_a.metric("Hold-Down Force", f"{result_row['Hold-Down Force (lb)']:.2f} lb")
-col_b.metric("Cutting Force", f"{result_row['Cutting Force (lb)']:.2f} lb")
+col_b.metric("Cut Force", f"{result_row['Cut Force (lb)']:.2f} lb")
 col_c.metric("Safety Factor", f"{result_row['Safety Factor']:.2f}", 
              delta="Safe" if result_row['Safety Factor'] > 1.5 else "At Risk",
              delta_color="normal" if result_row['Safety Factor'] > 1.5 else "inverse")
@@ -361,7 +361,7 @@ with tab1:
     st.markdown(f"""
     - **Hold-down force available:** {result_row['Hold-Down Force (lb)']:.2f} lb
     - **Maximum resistive force (with friction):** {result_row['Max Resistive Force (lb)']:.2f} lb
-    - **Cutting force to resist:** {result_row['Cutting Force (lb)']:.2f} lb
+    - **Cut Force to resist:** {result_row['Cut Force (lb)']:.2f} lb
     - **Movement risk ratio:** {result_row['Movement Risk Ratio']:.3f} (>1.0 means part will move)
     
     **Interpretation:**  
@@ -378,11 +378,11 @@ with tab1:
     - $W_{{part}}$ = Part weight ({part_weight:.2f} lb)
     """)
     
-    st.latex(r"\text{Cutting Force} = K_c \times \text{chip load} \times t_{part}")
+    st.latex(r"\text{Cut Force} = K_c \times \text{chip load} \times t_{part}")
     st.latex(r"\text{where: chip load} = \frac{f}{n \times RPM}")
     st.markdown(f"""
     Where:
-    - $K_c$ = Specific cutting force ({Kc:,} psi for {selected_material})
+    - $K_c$ = Specific Cut Force ({Kc:,} psi for {selected_material})
     - $f$ = Feed rate ({feed_rate} in/min)
     - $n$ = Number of flutes ({num_flutes})
     - $RPM$ = Spindle speed ({spindle_speed})
@@ -398,11 +398,11 @@ with tab1:
         - Number of flutes: {num_flutes}
         - **Chip load = {feed_rate} ÷ ({spindle_speed} × {num_flutes}) = {feed_rate/(spindle_speed*num_flutes):.6f} in/tooth**
         
-        **Cutting Force Calculation:**
-        - Specific cutting force (Kc): {Kc:,} psi (material: {selected_material})
+        **Cut Force Calculation:**
+        - Specific Cut Force (Kc): {Kc:,} psi (material: {selected_material})
         - Part thickness: {part_thickness} in
         - Chip area = chip load × thickness = {feed_rate/(spindle_speed*num_flutes):.6f} × {part_thickness} = {(feed_rate/(spindle_speed*num_flutes))*part_thickness:.6f} in²
-        - **Cutting force = Kc × chip area = {Kc:,} × {(feed_rate/(spindle_speed*num_flutes))*part_thickness:.6f} = {result_row['Cutting Force (lb)']:.2f} lb**
+        - **Cut Force = Kc × chip area = {Kc:,} × {(feed_rate/(spindle_speed*num_flutes))*part_thickness:.6f} = {result_row['Cut Force (lb)']:.2f} lb**
         
         *Note: If this seems too high or low, adjust Kc value in the Material Type section or select "Custom" to enter your own.*
         """)
@@ -416,7 +416,7 @@ with tab1:
     - Closer hole spacing (more holes per area)
     - Larger hole diameter (more suction area)
     
-    **Increases cutting force:**
+    **Increases Cut Force:**
     - Thicker material
     - Higher feed rate
     - Larger tool diameter
@@ -451,7 +451,7 @@ with tab2:
         y="Part Width (in)",
         color="Quality Score",
         size="Safety Factor Capped",
-        hover_data=["Hold-Down Force (lb)", "Cutting Force (lb)",
+        hover_data=["Hold-Down Force (lb)", "Cut Force (lb)",
                     "Safety Factor", "Part Moves"],
         color_continuous_scale="RdYlGn",
         title="Part Size vs Quality Score (Green = Safe, Red = Will Move)",
@@ -495,7 +495,7 @@ with tab2:
         st.warning(
             f"⚠️ **{len(at_risk)} of {len(df_parts)} part size combinations require tabs**\n\n"
             f"The tradespace tested {len(df_parts)} different part sizes (varying length and width). "
-            f"For {len(at_risk)} of these combinations, the cutting force exceeds the available "
+            f"For {len(at_risk)} of these combinations, the Cut Force exceeds the available "
             f"vacuum hold-down force after the part is fully cut out, meaning the part will shift or fly off without tabs.\n\n"
             f"**What this means:** These size/shape combinations need tabs to stay in place during cutting. "
             f"The scatter plot and heatmap above show which specific sizes are at risk (red/yellow areas)."
