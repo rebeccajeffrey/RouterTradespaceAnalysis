@@ -25,12 +25,11 @@ vacuum_pressure_inHg = st.sidebar.slider(
 
 # Use actual hold-down equation: y = 5.3926x + 8.7524
 # y = holding force in pounds per square foot
-# x = vacuum pressure in inches of mercury
-holding_force_psf = 5.3926 * vacuum_pressure_inHg + 8.7524
+# x = vacuum pressure in inches of mercury (use absolute value)
+holding_force_psf = 5.3926 * abs(vacuum_pressure_inHg) + 8.7524
 
 # Convert to psi (divide by 144 since 1 ft² = 144 in²)
-# Take absolute value since we're interested in magnitude of hold-down force
-holding_force_psi = abs(holding_force_psf / 144.0)
+holding_force_psi = holding_force_psf / 144.0
 
 st.sidebar.markdown("---")
 st.sidebar.header("Part & Table Configuration")
