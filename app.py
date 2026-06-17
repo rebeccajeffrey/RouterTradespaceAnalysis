@@ -368,8 +368,29 @@ with tab1:
     {'⚠️ Part will likely shift or fly off. Use tabs or increase vacuum pressure.' if result_row['Movement Risk Ratio'] >= 1.0 else '✅ Vacuum hold-down is sufficient. No tabs needed.'}
     """)
     
+    # Add equations
+    st.markdown("### 📐 Governing Equations")
+    st.latex(r"\text{Hold-Down Force} = \left(\frac{5.3926 \times |P_{vac}| + 8.7524}{144}\right) \times A_{sealed} + W_{part}")
+    st.markdown(f"""
+    Where:
+    - $P_{{vac}}$ = Vacuum pressure ({vacuum_pressure_inHg} inHg)
+    - $A_{{sealed}}$ = Sealed part area after cut-out ({sealed_area:.2f} in²)
+    - $W_{{part}}$ = Part weight ({part_weight:.2f} lb)
+    """)
+    
+    st.latex(r"\text{Cutting Force} = K_c \times \text{chip load} \times t_{part}")
+    st.latex(r"\text{where: chip load} = \frac{f}{n \times RPM}")
+    st.markdown(f"""
+    Where:
+    - $K_c$ = Specific cutting force ({Kc:,} psi for {selected_material})
+    - $f$ = Feed rate ({feed_rate} in/min)
+    - $n$ = Number of flutes ({num_flutes})
+    - $RPM$ = Spindle speed ({spindle_speed})
+    - $t_{{part}}$ = Part thickness ({part_thickness} in)
+    """)
+    
     # Add calculation details
-    with st.expander("📊 See Cutting Force Calculation Details"):
+    with st.expander("📊 See Detailed Calculation Breakdown"):
         st.markdown(f"""
         **Chip Load Calculation:**
         - Feed rate: {feed_rate} in/min
