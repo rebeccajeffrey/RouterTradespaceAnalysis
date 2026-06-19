@@ -70,9 +70,14 @@ st.sidebar.header("Material Type")
 # Material-specific Cut Force constants
 material_types = {
     "Foam (PVC/PMI)": {
-        "Kc": 5000,
+        "Kc": 240,
         "density": 0.010,
-        "description": "Low-density structural foam"
+        "description": "Low-density structural foam (measured: 2.65 lb @ 250 in/min, 0.75\" thick)"
+    },
+    "Crush Core Panel (Fiberglass Skins)": {
+        "Kc": 1197,
+        "density": 0.055,
+        "description": "Crush core with fiberglass face sheets (measured: 17.6 lb @ 500 in/min, 0.5\" thick)"
     },
     "Honeycomb Core + Carbon Fiber": {
         "Kc": 25000,
