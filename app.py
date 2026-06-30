@@ -444,8 +444,9 @@ with tab1:
             - **Time per tab:** ~12 seconds/tab (480 seconds ÷ 40 tabs)
             
             **Key Finding:** Setup and teardown time dominated the process. The operator spent significant time:
+            - **Setup and teardown: 3 minutes** (37.5% of total process time)
+            - **Actual cutting: 5 minutes** (62.5% of total process time)
             - Setting up the table saw
-            - Positioning and clamping parts
             - Cleaning up between cuts
             - Switching between hand saw and table saw
             
@@ -454,8 +455,8 @@ with tab1:
             If vacuum hold-down is sufficient (no tabs needed):
             - **Eliminate 8 minutes** of de-tabbing per 20 parts (5 configurations)
             - **Save 0.4 minutes (24 seconds)** per part
+            - **Eliminate 3 minutes** of setup/teardown entirely
             - **Reduce operator handling** and potential damage from manual tab removal
-            - **Eliminate setup/teardown** steps entirely
             
             **Scaling Impact:**
             - For 100 parts: **~40 minutes saved**
