@@ -426,6 +426,68 @@ with tab1:
     - Larger tool diameter
     - Lower spindle speed (higher chip load)
     """)
+    
+    # Add time analysis section for core materials (not foam)
+    if selected_material != "Foam (PVC/PMI)":
+        st.markdown("---")
+        st.markdown("### ⏱️ De-Tabbing Time Analysis (Core Materials)")
+        
+        with st.expander("📊 See Time Savings from Eliminating Tabs"):
+            st.markdown("""
+            **Empirical Data from Peeler Configuration:**
+            
+            Based on actual production analysis:
+            - **Test setup:** 5 "Peeler configurations" (each configuration = 4 parts with 2 tabs per part)
+            - **Total tabs to remove:** 40 tabs (5 configs × 4 parts × 2 tabs)
+            - **Total de-tabbing time:** 8 minutes
+            - **Tools used:** Hand saw and table saw
+            - **Time per tab:** ~12 seconds/tab (480 seconds ÷ 40 tabs)
+            
+            **Key Finding:** Setup and teardown time dominated the process. The operator spent significant time:
+            - Setting up the table saw
+            - Positioning and clamping parts
+            - Cleaning up between cuts
+            - Switching between hand saw and table saw
+            
+            **Time Savings Calculation:**
+            
+            If vacuum hold-down is sufficient (no tabs needed):
+            - **Eliminate 8 minutes** of de-tabbing per 20 parts (5 configurations)
+            - **Save 0.4 minutes (24 seconds)** per part
+            - **Reduce operator handling** and potential damage from manual tab removal
+            - **Eliminate setup/teardown** steps entirely
+            
+            **Scaling Impact:**
+            - For 100 parts: **~40 minutes saved**
+            - For 500 parts: **~3.3 hours saved**
+            - For 1,000 parts: **~6.7 hours saved**
+            
+            **Additional Benefits:**
+            - Reduced risk of part damage during de-tabbing
+            - Lower labor cost (no manual finishing required)
+            - Improved part edge quality (no tab witness marks)
+            - Faster throughput for high-volume production
+            
+            **Note:** This time analysis applies to core materials (crush core, honeycomb composites, laminates). 
+            Foam materials may have different de-tabbing characteristics.
+            """)
+            
+            # Visual time breakdown
+            st.markdown("**Time Breakdown (per part):**")
+            time_data = pd.DataFrame({
+                "Activity": ["With Tabs (De-tabbing)", "Without Tabs (Direct Use)"],
+                "Time (seconds)": [24, 0]
+            })
+            fig_time = px.bar(
+                time_data,
+                x="Activity",
+                y="Time (seconds)",
+                title="Post-Processing Time Comparison",
+                color="Activity",
+                color_discrete_map={"With Tabs (De-tabbing)": "#ff6b6b", "Without Tabs (Direct Use)": "#51cf66"}
+            )
+            fig_time.update_layout(showlegend=False, height=300)
+            st.plotly_chart(fig_time, use_container_width=True)
 
 with tab2:
     st.subheader("Part Size Tradespace (Through-Cut Scenario)")
