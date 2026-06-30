@@ -430,13 +430,13 @@ with tab1:
     # Add time analysis section for core materials (not foam)
     if selected_material != "Foam (PVC/PMI)":
         st.markdown("---")
-        st.markdown("### ⏱️ De-Tabbing Time Analysis (Core Materials)")
+        st.markdown("### ⏱️ De-Tabbing Time Analysis - Router Room (Core Materials)")
         
-        with st.expander("📊 See Time Savings from Eliminating Tabs"):
+        with st.expander("📊 See Time Savings from Eliminating Tabs (Router Room)"):
             st.markdown("""
             **Empirical Data from Peeler Configuration:**
             
-            Based on actual production analysis:
+            Based on actual production analysis in the router room:
             - **Test setup:** 5 "Peeler configurations" (each configuration = 4 parts with 2 tabs per part)
             - **Total tabs to remove:** 40 tabs (5 configs × 4 parts × 2 tabs)
             - **Total de-tabbing time:** 8 minutes
@@ -469,8 +469,8 @@ with tab1:
             - Improved part edge quality (no tab witness marks)
             - Faster throughput for high-volume production
             
-            **Note:** This time analysis applies to core materials (crush core, honeycomb composites, laminates). 
-            Foam materials may have different de-tabbing characteristics.
+            **Note:** This time analysis applies to core materials (crush core, honeycomb composites, laminates) 
+            processed in the router room. See MOP section below for foam material de-tabbing.
             """)
             
             # Visual time breakdown
@@ -483,12 +483,36 @@ with tab1:
                 time_data,
                 x="Activity",
                 y="Time (seconds)",
-                title="Post-Processing Time Comparison",
+                title="Post-Processing Time Comparison - Router Room",
                 color="Activity",
                 color_discrete_map={"With Tabs (De-tabbing)": "#ff6b6b", "Without Tabs (Direct Use)": "#51cf66"}
             )
             fig_time.update_layout(showlegend=False, height=300)
             st.plotly_chart(fig_time, use_container_width=True)
+    
+    # Add time analysis section for foam materials (MOP)
+    if selected_material == "Foam (PVC/PMI)":
+        st.markdown("---")
+        st.markdown("### ⏱️ De-Tabbing Time Analysis - MOP Work Center (Foam Materials)")
+        
+        with st.expander("📊 See Time Savings from Eliminating Tabs (MOP)"):
+            st.markdown("""
+            **Multi-Opening Press (MOP) De-Tabbing Analysis:**
+            
+            Foam parts are de-tabbed at the MOP (Multi-Opening Press) work center, which has different 
+            processes and time characteristics compared to router room de-tabbing.
+            
+            **Note:** Detailed time analysis data for MOP de-tabbing is pending. This section will be updated 
+            with empirical data including:
+            - Setup and teardown time
+            - De-tabbing time per part
+            - Tools and methods used
+            - Scaling impact for production volumes
+            
+            *Data collection in progress...*
+            """)
+            
+            st.info("⏳ MOP de-tabbing time data will be added soon. Check back for updates!")
 
 with tab2:
     st.subheader("Part Size Tradespace (Through-Cut Scenario)")
